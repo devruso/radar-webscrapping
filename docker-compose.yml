@@ -1,0 +1,174 @@
+version: "3.9"
+
+services:
+  # Banco de dados PostgreSQL para desenvolvimento local
+  postgres:
+    image: postgres:15-alpine
+    container_name: radar-webscrapping-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: radar_webscrapping
+      POSTGRES_USER: radar_user
+      POSTGRES_PASSWORD: radar_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db:/docker-entrypoint-initdb.d
+    networks:
+      - webscrapping-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U radar_user -d radar_webscrapping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis para cache (opcional)
+  redis:
+    image: redis:7-alpine
+    container_name: radar-webscrapping-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - webscrapping-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Aplicação WebScrapping
+  webscrapping:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: radar/webscrapping:dev
+    container_name: radar-webscrapping-app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Configurações de banco
+      DATABASE_URL: postgresql+asyncpg://radar_user:radar_password@postgres:5432/radar_webscrapping
+      
+      # Configurações Redis
+      REDIS_URL: redis://redis:6379/0
+      
+      # Configurações da aplicação
+      APP_ENV: development
+      LOG_LEVEL: DEBUG
+      
+      # Configurações Selenium
+      SELENIUM_HEADLESS: "true"
+      SELENIUM_TIMEOUT: 30
+      SELENIUM_IMPLICIT_WAIT: 10
+      
+      # Configurações SIGAA
+      SIGAA_BASE_URL: https://sigaa.ufba.br/sigaa
+      SIGAA_DELAY_BETWEEN_REQUESTS: 2.0
+      
+      # Configurações API externa (radar-webapi)
+      RADAR_API_URL: http://host.docker.internal:8080
+      RADAR_API_KEY: dev-api-key
+      RADAR_API_TIMEOUT: 30
+      
+      # Configuração de scraping
+      SCRAPING_MAX_RETRIES: 3
+      SCRAPING_BATCH_SIZE: 10
+      SCRAPING_CONCURRENT_LIMIT: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - webscrapping-network
+    volumes:
+      - webscrapping_data:/app/data
+      - webscrapping_logs:/app/logs
+      # Mount código para desenvolvimento (comentar em produção)
+      - ./src:/app/src:ro
+      - ./main.py:/app/main.py:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Jupyter para análise de dados (desenvolvimento)
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: radar/webscrapping:dev
+    container_name: radar-webscrapping-jupyter
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://radar_user:radar_password@postgres:5432/radar_webscrapping
+      JUPYTER_ENABLE_LAB: "yes"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - webscrapping-network
+    volumes:
+      - ./notebooks:/app/notebooks
+      - ./src:/app/src:ro
+      - webscrapping_data:/app/data
+    command: >
+      bash -c "
+        pip install jupyter jupyterlab &&
+        jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --notebook-dir=/app
+      "
+    profiles:
+      - development
+
+  # PgAdmin para administração do banco (desenvolvimento)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: radar-webscrapping-pgadmin
+    restart: unless-stopped
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@radar.ufba.br
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    depends_on:
+      - postgres
+    networks:
+      - webscrapping-network
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    profiles:
+      - development
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  webscrapping_data:
+    driver: local
+  webscrapping_logs:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  webscrapping-network:
+    driver: bridge
+    name: radar-webscrapping-network
+
+# Configurações adicionais para desenvolvimento
+x-common-variables: &common-variables
+  TZ: America/Bahia
+  LANG: pt_BR.UTF-8
+  LC_ALL: pt_BR.UTF-8
