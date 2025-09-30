@@ -179,8 +179,10 @@ radar-webscrapping/
 ├── main.py                      # 🚀 Ponto de entrada
 ├── requirements.txt             # 📦 Dependências
 ├── .env.example                 # ⚙️ Variáveis de ambiente
-├── CONTEXT.md                   # 📋 Contexto arquitetural
 └── README.md                    # 📖 Documentação principal
+├── .github/
+│   ├── CONTEXT.md              # 📋 Contexto arquitetural
+│   └── workflows/              # 🤖 GitHub Actions
 ```
 
 ## Configuração do Ambiente

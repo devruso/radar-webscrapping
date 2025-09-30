@@ -132,7 +132,7 @@ cp .env.example .env
 src/scrapers/curso_scraper.py  # (exemplo)
 
 # Como funciona atualmente?
-# Leia CONTEXT.md e DEVELOPMENT_GUIDE.md
+# Leia .github/CONTEXT.md e DEVELOPMENT_GUIDE.md
 ```
 
 #### 2. **Fazer Alterações**
@@ -601,7 +601,7 @@ pytest tests/ -v -s
 5. ✅ Fazer commit e ver GitHub Actions funcionar
 
 ### Semana 2 - Desenvolvimento:
-1. ✅ Entender arquitetura em `CONTEXT.md`
+1. ✅ Entender arquitetura em `.github/CONTEXT.md`
 2. ✅ Modificar lógica de scraping
 3. ✅ Adicionar novos testes
 4. ✅ Trabalhar com branches/PRs
@@ -623,7 +623,7 @@ pytest tests/ -v -s
 
 ### 1. **Documentação do Projeto**
 - `README.md` - Visão geral
-- `CONTEXT.md` - Arquitetura
+- `.github/CONTEXT.md` - Arquitetura
 - `DOCKER.md` - Como usar Docker
 - `.github/README.md` - CI/CD
 

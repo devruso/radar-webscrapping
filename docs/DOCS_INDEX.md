@@ -115,7 +115,7 @@ docker-compose up -d
 
 ### **Documentação Original:**
 - **README.md**: Visão geral do projeto
-- **CONTEXT.md**: Arquitetura Clean Architecture
+- **.github/CONTEXT.md**: Arquitetura Clean Architecture
 - **DOCKER.md**: Guia completo de Docker
 - **DEVELOPMENT_GUIDE.md**: Guia de desenvolvimento (original)
 
@@ -142,7 +142,7 @@ docker-compose up -d
 2. 📖 `DOCKER.md` → Documentação completa
 
 ### **"Quero entender a arquitetura"**
-1. 📖 `CONTEXT.md` → Arquitetura Clean
+1. 📖 `.github/CONTEXT.md` → Arquitetura Clean
 2. 📖 `DEVELOPMENT_GUIDE.md` → Estrutura do projeto
 
 ## 🔍 Busca Rápida por Problema
