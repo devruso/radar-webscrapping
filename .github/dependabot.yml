@@ -1,0 +1,143 @@
+# Configuração do Dependabot para Radar WebScrapping
+# Documentação: https://docs.github.com/en/code-security/dependabot
+
+version: 2
+updates:
+  # ===============================================================================
+  # PYTHON DEPENDENCIES
+  # ===============================================================================
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Bahia"
+    
+    # Configurações de PR
+    open-pull-requests-limit: 5
+    
+    # Prefixos para commits e PRs
+    commit-message:
+      prefix: "⬆️"
+      prefix-development: "⬆️ dev"
+      include: "scope"
+    
+    # Labels para PRs
+    labels:
+      - "dependencies"
+      - "python"
+      - "automated"
+    
+    # Reviewers automáticos
+    reviewers:
+      - "devruso"
+    
+    # Grupos de dependências
+    groups:
+      # Core dependencies (críticas)
+      core-dependencies:
+        patterns:
+          - "fastapi*"
+          - "sqlalchemy*"
+          - "pydantic*"
+          - "selenium*"
+          - "asyncio*"
+      
+      # Development dependencies
+      dev-dependencies:
+        patterns:
+          - "pytest*"
+          - "black*"
+          - "flake8*"
+          - "mypy*"
+          - "isort*"
+      
+      # Security dependencies
+      security-dependencies:
+        patterns:
+          - "cryptography*"
+          - "requests*"
+          - "urllib3*"
+          - "certifi*"
+    
+    # Ignorar algumas atualizações
+    ignore:
+      # Ignorar major versions para pacotes críticos
+      - dependency-name: "sqlalchemy"
+        update-types: ["version-update:semver-major"]
+      
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-major"]
+      
+      # Ignorar versões específicas problemáticas (exemplo)
+      # - dependency-name: "some-package"
+      #   versions: ["1.0.0", "1.0.1"]
+
+  # ===============================================================================
+  # DOCKER DEPENDENCIES
+  # ===============================================================================
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "10:00"
+      timezone: "America/Bahia"
+    
+    open-pull-requests-limit: 2
+    
+    commit-message:
+      prefix: "🐳"
+      include: "scope"
+    
+    labels:
+      - "dependencies"
+      - "docker"
+      - "automated"
+    
+    reviewers:
+      - "devruso"
+
+  # ===============================================================================
+  # GITHUB ACTIONS
+  # ===============================================================================
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "11:00"
+      timezone: "America/Bahia"
+    
+    open-pull-requests-limit: 3
+    
+    commit-message:
+      prefix: "🤖"
+      include: "scope"
+    
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "automated"
+      - "ci-cd"
+    
+    reviewers:
+      - "devruso"
+
+  # ===============================================================================
+  # DOCKER COMPOSE (se houver docker-compose.yml separado)
+  # ===============================================================================
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      day: "first-monday"
+    
+    commit-message:
+      prefix: "🐳 compose"
+    
+    labels:
+      - "dependencies"
+      - "docker-compose"
+      - "automated"
