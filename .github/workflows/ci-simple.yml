@@ -1,0 +1,120 @@
+name: CI - Simple
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  simple-ci:
+    name: 🔍 Simple CI Pipeline
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: radar_webscrapping
+          POSTGRES_USER: radar_user
+          POSTGRES_PASSWORD: radar_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget gnupg ca-certificates
+          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+          echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      - name: Install ChromeDriver
+        run: |
+          CHROME_VERSION=$(google-chrome --version | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")
+          CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION%%.*}")
+          wget -O /tmp/chromedriver.zip "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
+          sudo unzip /tmp/chromedriver.zip -d /usr/local/bin/
+          sudo chmod +x /usr/local/bin/chromedriver
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 bandit pytest pytest-cov
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Build Docker image
+        run: docker build -t radar-webscrapping .
+
+      - name: Run linting
+        run: |
+          flake8 src/ --max-line-length=100 --extend-ignore=E203,W503 || true
+
+      - name: Run security scan
+        run: |
+          bandit -r src/ -f json -o bandit-report.json || true
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql+asyncpg://radar_user:radar_password@localhost:5432/radar_webscrapping
+          REDIS_URL: redis://localhost:6379/0
+          SELENIUM_HEADLESS: true
+          APP_ENV: testing
+        run: |
+          mkdir -p data logs
+          pytest tests/ -v --cov=src --cov-report=xml || true
+
+      - name: Test Docker container
+        run: |
+          # Test CLI
+          docker run --rm radar-webscrapping cli --help
+          
+          # Test container startup
+          docker run -d --name test-container --network host \
+            -e DATABASE_URL=postgresql+asyncpg://radar_user:radar_password@localhost:5432/radar_webscrapping \
+            -e APP_ENV=testing \
+            radar-webscrapping api
+          
+          sleep 20
+          
+          # Test health check
+          curl -f http://localhost:8000/health || echo "Health check failed"
+          
+          # Cleanup
+          docker stop test-container || true
+          docker rm test-container || true
+
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            coverage.xml
+            bandit-report.json

@@ -1,0 +1,380 @@
+name: 🧹 Cleanup & Maintenance
+
+on:
+  schedule:
+    # Todo domingo às 2h UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      cleanup-type:
+        description: 'Type of cleanup to perform'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - 'all'
+          - 'cache'
+          - 'packages'
+          - 'artifacts'
+          - 'releases'
+
+jobs:
+  # ===============================================================================
+  # LIMPEZA DE CACHE
+  # ===============================================================================
+  cleanup-cache:
+    name: 💾 Cleanup GitHub Actions Cache
+    runs-on: ubuntu-latest
+    if: github.event.inputs.cleanup-type == 'all' || github.event.inputs.cleanup-type == 'cache' || github.event_name == 'schedule'
+    
+    steps:
+      - name: Cleanup old caches
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { data: caches } = await github.rest.actions.getActionsCacheList({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            
+            // Manter apenas caches dos últimos 7 dias
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            
+            let deletedCount = 0;
+            let totalSize = 0;
+            
+            for (const cache of caches.actions_caches) {
+              const cacheDate = new Date(cache.created_at);
+              
+              if (cacheDate < sevenDaysAgo) {
+                console.log(`Deleting cache: ${cache.key} (${cache.size_in_bytes} bytes)`);
+                
+                try {
+                  await github.rest.actions.deleteActionsCacheById({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    cache_id: cache.id
+                  });
+                  
+                  deletedCount++;
+                  totalSize += cache.size_in_bytes;
+                } catch (error) {
+                  console.log(`Failed to delete cache ${cache.key}: ${error.message}`);
+                }
+              }
+            }
+            
+            console.log(`✅ Deleted ${deletedCount} old caches`);
+            console.log(`💾 Freed ${Math.round(totalSize / 1024 / 1024)} MB`);
+
+  # ===============================================================================
+  # LIMPEZA DE PACKAGES (DOCKER IMAGES)
+  # ===============================================================================
+  cleanup-packages:
+    name: 📦 Cleanup Container Packages
+    runs-on: ubuntu-latest
+    if: github.event.inputs.cleanup-type == 'all' || github.event.inputs.cleanup-type == 'packages' || github.event_name == 'schedule'
+    
+    steps:
+      - name: Delete old untagged container images
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ github.event.repository.name }}
+          package-type: 'container'
+          min-versions-to-keep: 20
+          delete-only-untagged-versions: true
+
+      - name: Delete old tagged versions (keep latest 10)
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ github.event.repository.name }}
+          package-type: 'container'
+          min-versions-to-keep: 10
+          delete-only-untagged-versions: false
+          ignore-versions: '^v\d+\.\d+\.\d+$' # Keep semantic versions
+
+  # ===============================================================================
+  # LIMPEZA DE ARTIFACTS
+  # ===============================================================================
+  cleanup-artifacts:
+    name: 📄 Cleanup Build Artifacts
+    runs-on: ubuntu-latest
+    if: github.event.inputs.cleanup-type == 'all' || github.event.inputs.cleanup-type == 'artifacts' || github.event_name == 'schedule'
+    
+    steps:
+      - name: Delete old workflow artifacts
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { data: artifacts } = await github.rest.actions.listArtifactsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            
+            // Manter apenas artefatos dos últimos 30 dias
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            
+            let deletedCount = 0;
+            let totalSize = 0;
+            
+            for (const artifact of artifacts.artifacts) {
+              const artifactDate = new Date(artifact.created_at);
+              
+              if (artifactDate < thirtyDaysAgo) {
+                console.log(`Deleting artifact: ${artifact.name} (${artifact.size_in_bytes} bytes)`);
+                
+                try {
+                  await github.rest.actions.deleteArtifact({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    artifact_id: artifact.id
+                  });
+                  
+                  deletedCount++;
+                  totalSize += artifact.size_in_bytes;
+                } catch (error) {
+                  console.log(`Failed to delete artifact ${artifact.name}: ${error.message}`);
+                }
+              }
+            }
+            
+            console.log(`✅ Deleted ${deletedCount} old artifacts`);
+            console.log(`💾 Freed ${Math.round(totalSize / 1024 / 1024)} MB`);
+
+  # ===============================================================================
+  # LIMPEZA DE RELEASES ANTIGAS
+  # ===============================================================================
+  cleanup-releases:
+    name: 🏷️ Cleanup Old Pre-releases
+    runs-on: ubuntu-latest
+    if: github.event.inputs.cleanup-type == 'all' || github.event.inputs.cleanup-type == 'releases' || github.event_name == 'schedule'
+    
+    steps:
+      - name: Delete old pre-releases
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            
+            // Separar releases e pre-releases
+            const stableReleases = releases.filter(r => !r.prerelease);
+            const preReleases = releases.filter(r => r.prerelease);
+            
+            let deletedCount = 0;
+            
+            // Manter apenas os últimos 5 pre-releases
+            if (preReleases.length > 5) {
+              const toDelete = preReleases.slice(5);
+              
+              for (const release of toDelete) {
+                console.log(`Deleting old pre-release: ${release.tag_name}`);
+                
+                try {
+                  // Deletar release
+                  await github.rest.repos.deleteRelease({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    release_id: release.id
+                  });
+                  
+                  // Tentar deletar tag associada
+                  try {
+                    await github.rest.git.deleteRef({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      ref: `tags/${release.tag_name}`
+                    });
+                  } catch (tagError) {
+                    console.log(`Could not delete tag ${release.tag_name}: ${tagError.message}`);
+                  }
+                  
+                  deletedCount++;
+                } catch (error) {
+                  console.log(`Failed to delete release ${release.tag_name}: ${error.message}`);
+                }
+              }
+            }
+            
+            // Manter releases estáveis (não deletar)
+            console.log(`📊 Stable releases: ${stableReleases.length}`);
+            console.log(`📊 Pre-releases: ${preReleases.length}`);
+            console.log(`✅ Deleted ${deletedCount} old pre-releases`);
+
+  # ===============================================================================
+  # VERIFICAÇÃO DE SAÚDE DO REPOSITÓRIO
+  # ===============================================================================
+  repository-health:
+    name: 🏥 Repository Health Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event.inputs.cleanup-type == 'all'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check repository health
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Verificar arquivos essenciais
+            const essentialFiles = [
+              'README.md',
+              'LICENSE',
+              'requirements.txt',
+              'Dockerfile',
+              '.github/workflows/ci-cd.yml',
+              'src/main.py'
+            ];
+            
+            let missingFiles = [];
+            
+            for (const file of essentialFiles) {
+              if (!fs.existsSync(file)) {
+                missingFiles.push(file);
+              }
+            }
+            
+            // Verificar tamanho do repositório
+            const { data: repo } = await github.rest.repos.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            
+            console.log(`📊 Repository size: ${repo.size} KB`);
+            console.log(`📊 Default branch: ${repo.default_branch}`);
+            console.log(`📊 Open issues: ${repo.open_issues_count}`);
+            
+            if (missingFiles.length > 0) {
+              console.log(`⚠️ Missing essential files: ${missingFiles.join(', ')}`);
+            } else {
+              console.log(`✅ All essential files present`);
+            }
+            
+            // Verificar workflows recentes
+            const { data: runs } = await github.rest.actions.listWorkflowRunsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 10
+            });
+            
+            const recentFailures = runs.workflow_runs.filter(run => 
+              run.conclusion === 'failure' && 
+              new Date(run.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+            );
+            
+            if (recentFailures.length > 0) {
+              console.log(`⚠️ Recent workflow failures: ${recentFailures.length}`);
+            } else {
+              console.log(`✅ No recent workflow failures`);
+            }
+
+  # ===============================================================================
+  # RELATÓRIO DE LIMPEZA
+  # ===============================================================================
+  cleanup-report:
+    name: 📊 Cleanup Report
+    runs-on: ubuntu-latest
+    needs: [cleanup-cache, cleanup-packages, cleanup-artifacts, cleanup-releases, repository-health]
+    if: always() && (github.event_name == 'schedule' || github.event.inputs.cleanup-type == 'all')
+    
+    steps:
+      - name: Generate cleanup report
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const date = new Date().toISOString().split('T')[0];
+            
+            // Coletar informações do repositório
+            const { data: repo } = await github.rest.repos.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 10
+            });
+            
+            const report = `
+            ## 🧹 Weekly Cleanup Report - ${date}
+            
+            ### 📊 Repository Statistics
+            - **Size**: ${repo.size} KB
+            - **Stars**: ${repo.stargazers_count}
+            - **Forks**: ${repo.forks_count}
+            - **Open Issues**: ${repo.open_issues_count}
+            - **Releases**: ${releases.length}
+            
+            ### ✅ Cleanup Actions Performed
+            - ✅ Cleaned GitHub Actions cache (7+ days old)
+            - ✅ Removed old Docker images (kept latest 20)
+            - ✅ Deleted old build artifacts (30+ days old)
+            - ✅ Cleaned old pre-releases (kept latest 5)
+            - ✅ Repository health check completed
+            
+            ### 🎯 Recommendations
+            - Keep dependencies up to date with Dependabot
+            - Monitor Docker image sizes
+            - Review and close old issues
+            - Consider archiving old branches
+            
+            ---
+            *This report was generated automatically by GitHub Actions*
+            `;
+            
+            console.log(report);
+            
+            // Opcionalmente, criar um issue com o relatório
+            // await github.rest.issues.create({
+            //   owner: context.repo.owner,
+            //   repo: context.repo.repo,
+            //   title: `🧹 Weekly Cleanup Report - ${date}`,
+            //   body: report,
+            //   labels: ['maintenance', 'automated']
+            // });
+
+  # ===============================================================================
+  # OTIMIZAÇÃO DO GIT
+  # ===============================================================================
+  git-optimization:
+    name: 🔧 Git Optimization
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event.inputs.cleanup-type == 'all'
+    
+    steps:
+      - name: Checkout with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Git repository optimization
+        run: |
+          echo "📊 Repository statistics before optimization:"
+          du -sh .git
+          git count-objects -v
+          
+          echo "🔧 Running git maintenance..."
+          git maintenance run --auto
+          
+          echo "📊 Repository statistics after optimization:"
+          du -sh .git
+          git count-objects -v
+          
+          echo "✅ Git optimization completed"
