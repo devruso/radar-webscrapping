@@ -1,0 +1,97 @@
+# ===============================================================================
+# REQUIREMENTS PARA DESENVOLVIMENTO - RADAR WEBSCRAPPING
+# ===============================================================================
+
+# Ferramentas de desenvolvimento e testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.0
+pytest-xdist>=3.3.0
+pytest-html>=3.2.0
+
+# Code quality e linting
+black>=23.7.0
+isort>=5.12.0
+flake8>=6.0.0
+mypy>=1.5.0
+bandit>=1.7.5
+
+# Security scanning
+safety>=2.3.0
+pip-audit>=2.6.0
+
+# Documentação
+sphinx>=7.1.0
+sphinx-rtd-theme>=1.3.0
+myst-parser>=2.0.0
+
+# Pre-commit hooks
+pre-commit>=3.3.0
+
+# Performance profiling
+memory-profiler>=0.61.0
+line-profiler>=4.1.0
+
+# Database migrations (se necessário)
+alembic>=1.11.0
+
+# Testing utilities
+factory-boy>=3.3.0
+faker>=19.3.0
+responses>=0.23.0
+aioresponses>=0.7.4
+
+# Coverage reporting
+coverage[toml]>=7.3.0
+codecov>=2.1.13
+
+# Development server
+watchdog>=3.0.0
+
+# Jupyter para análise de dados (desenvolvimento)
+jupyter>=1.0.0
+jupyterlab>=4.0.0
+notebook>=7.0.0
+
+# Data analysis (para desenvolvimento)
+pandas>=2.0.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Git hooks e automação
+gitpython>=3.1.32
+
+# Debugging
+debugpy>=1.6.7
+ipdb>=0.13.13
+
+# Load testing (para APIs)
+locust>=2.16.0
+
+# HTTP debugging
+httpx-debug>=0.1.0
+
+# Environment management
+python-dotenv>=1.0.0
+
+# Linting específico para imports
+isort[colors]>=5.12.0
+
+# Type checking para bibliotecas específicas
+types-requests>=2.31.0
+types-setuptools>=68.0.0
+
+# Ferramentas de build
+build>=0.10.0
+twine>=4.0.0
+
+# Ferramentas de análise de código
+vulture>=2.9.1  # Dead code detection
+radon>=6.0.1    # Code complexity analysis
+
+# Performance testing
+pytest-benchmark>=4.0.0
+
+# Mock servers para testing
+wiremock>=0.3.0
